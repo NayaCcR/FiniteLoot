@@ -1,0 +1,17 @@
+default-max-claims: 3
+show-remaining-claims: true
+per-player-limit: 1
+exhausted-action: DENY
+prevent-item-insertion: true
+prevent-hopper-extraction: true
+prevent-breaking: true
+prevent-explosions: true
+count-creative-players: false
+admin-bypass-counts: false
+excluded-worlds: []
+language: zh_CN
+loot-table-overrides:
+  minecraft:chests/end_city_treasure: 2
+  minecraft:chests/ancient_city: 2
+  minecraft:chests/simple_dungeon: 5
+  minecraft:chests/abandoned_mineshaft: 4

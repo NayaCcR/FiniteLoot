@@ -1,0 +1,9 @@
+name: FiniteLoot
+version: '${version}'
+main: vip.naya.finiteloot.FiniteLootPlugin
+description: Per-player structure loot with a server-wide claim cap.
+author: Naya
+api-version: '26.2'
+load: POSTWORLD
+prefix: FiniteLoot
+
