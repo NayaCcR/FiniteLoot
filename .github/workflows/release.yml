@@ -1,0 +1,89 @@
+name: Release FiniteLoot
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, for example v1.1.1'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: |
+          git config core.filemode false
+          chmod +x gradlew
+
+      - name: Build, test, and check style
+        run: ./gradlew clean build --stacktrace
+
+      - name: Validate version and select deployable JAR
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_TAG" != v* || "${RELEASE_TAG#v}" == "$RELEASE_TAG" ]]; then
+            echo "Release tag must start with v (for example v1.1.1): $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+          jar_path="$(find build/libs -maxdepth 1 -type f -name 'FiniteLoot-*.jar' \
+            ! -name '*-plain.jar' ! -name '*-sources.jar' -print -quit)"
+          if [[ -z "$jar_path" ]]; then
+            echo 'No deployable FiniteLoot JAR was produced.' >&2
+            exit 1
+          fi
+
+          built_version="$(unzip -p "$jar_path" paper-plugin.yml \
+            | sed -n "s/^version: '\(.*\)'$/\1/p")"
+          tag_version="${RELEASE_TAG#v}"
+          if [[ -z "$built_version" || "$built_version" != "$tag_version" ]]; then
+            echo "Version mismatch: tag=$tag_version, plugin=$built_version" >&2
+            exit 1
+          fi
+
+          echo "jar=$jar_path" >> "$GITHUB_OUTPUT"
+          echo "version=$built_version" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: FiniteLoot ${{ steps.package.outputs.version }}
+          generate_release_notes: true
+          files: ${{ steps.package.outputs.jar }}
+          fail_on_unmatched_files: true

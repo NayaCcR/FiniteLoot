@@ -1,18 +1,22 @@
-name: Build FiniteLoot
+name: Quick Test FiniteLoot
 
 on:
+  push:
+    branches:
+      - '**'
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.workflow }}-${{ github.ref }}
+  group: quick-test-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build and test
+  test:
+    name: Fast unit tests
     runs-on: ubuntu-latest
 
     steps:
@@ -34,13 +38,5 @@ jobs:
           git config core.filemode false
           chmod +x gradlew
 
-      - name: Build, test, and check style
-        run: ./gradlew clean build --stacktrace
-
-      - name: Upload plugin artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: FiniteLoot-${{ github.sha }}
-          path: build/libs/FiniteLoot-*.jar
-          if-no-files-found: error
-          retention-days: 14
+      - name: Run unit tests
+        run: ./gradlew test --no-daemon --parallel --console=plain

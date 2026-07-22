@@ -1,7 +1,7 @@
 .gradle/
 .gradle-user/
 build/
+bin/
 out/
 *.iml
 .idea/
-
