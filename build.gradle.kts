@@ -27,13 +27,12 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.+")
-    implementation("org.xerial:sqlite-jdbc:3.51.1.0") {
-        exclude(group = "org.slf4j")
-    }
+    compileOnly("org.xerial:sqlite-jdbc:3.51.1.0")
 
     testImplementation(platform("org.junit:junit-bom:6.0.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("io.papermc.paper:paper-api:26.2.build.+")
+    testRuntimeOnly("org.xerial:sqlite-jdbc:3.51.1.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

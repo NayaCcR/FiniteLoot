@@ -6,4 +6,5 @@ author: Naya
 api-version: '26.2'
 load: POSTWORLD
 prefix: FiniteLoot
-
+libraries:
+  - org.xerial:sqlite-jdbc:3.51.1.0

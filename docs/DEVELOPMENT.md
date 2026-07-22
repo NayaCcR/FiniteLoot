@@ -7,7 +7,7 @@ $env:JAVA_HOME='C:\Program Files\Java\jdk-25.0.3'
 .\gradlew.bat clean build
 ```
 
-产物位于 `build/libs/`。项目使用 Gradle Kotlin DSL、Paper API、Java 25，不使用 NMS、反射或版本绑定代码。
+产物位于 `build/libs/`。项目使用 Gradle Kotlin DSL、Paper API、Java 25，不使用 NMS、反射或版本绑定代码。SQLite JDBC 由 Paper 按 `paper-plugin.yml` 的 `libraries` 配置在运行时加载，不会打进插件 JAR；服务器首次启动需要访问 Maven 仓库，之后由 Paper 缓存依赖。
 
 ## 测试
 
