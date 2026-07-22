@@ -19,4 +19,4 @@ $env:JAVA_HOME='C:\Program Files\Java\jdk-25.0.3'
 
 - `quick-test.yml`：分支推送和 PR 自动执行快速单元测试。
 - `build.yml`：手动执行完整构建、测试、Checkstyle 并上传构建产物。
-- `release.yml`：按标签构建并发布 GitHub Release。
+- `release.yml`：`main` 分支快速测试成功后自动创建版本标签，并完成构建、测试和 GitHub Release 发布。
