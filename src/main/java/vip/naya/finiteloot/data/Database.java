@@ -103,9 +103,9 @@ public final class Database implements AutoCloseable {
     }
 
     public CompletableFuture<ClaimAllocation> allocateClaim(
-            UUID containerId, UUID playerId, String playerName, boolean counted) {
+            UUID containerId, UUID playerId, String playerName, boolean counted, boolean reopenCompleted) {
         return submit(() -> immediateTransaction(() -> {
-            ClaimAllocation existing = existingClaim(containerId, playerId);
+            ClaimAllocation existing = existingClaim(containerId, playerId, reopenCompleted);
             if (existing != null) {
                 return existing;
             }
@@ -368,7 +368,10 @@ public final class Database implements AutoCloseable {
         return submit(() -> null);
     }
 
-    private ClaimAllocation existingClaim(UUID containerId, UUID playerId) throws SQLException {
+    private ClaimAllocation existingClaim(
+            UUID containerId, UUID playerId, boolean reopenCompleted) throws SQLException {
+        String status;
+        byte[] contents;
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT c.status, p.contents
                 FROM claims c
@@ -382,13 +385,37 @@ public final class Database implements AutoCloseable {
                 if (!result.next()) {
                     return null;
                 }
-                return switch (result.getString(1)) {
-                    case "COMPLETED" -> ClaimAllocation.of(ClaimAllocation.Kind.COMPLETED);
-                    case "ACTIVE" -> new ClaimAllocation(ClaimAllocation.Kind.EXISTING, result.getBytes(2));
-                    default -> ClaimAllocation.of(ClaimAllocation.Kind.PENDING);
-                };
+                status = result.getString(1);
+                contents = result.getBytes(2);
             }
         }
+        if ("COMPLETED".equals(status) && reopenCompleted) {
+            long now = System.currentTimeMillis();
+            try (PreparedStatement claim = connection.prepareStatement("""
+                    UPDATE claims SET status='ACTIVE', updated_at=?
+                    WHERE container_id=? AND player_uuid=? AND status='COMPLETED'
+                    """)) {
+                claim.setLong(1, now);
+                claim.setString(2, containerId.toString());
+                claim.setString(3, playerId.toString());
+                claim.executeUpdate();
+            }
+            try (PreparedStatement inventory = connection.prepareStatement("""
+                    UPDATE personal_inventories SET completed=0, updated_at=?
+                    WHERE container_id=? AND player_uuid=?
+                    """)) {
+                inventory.setLong(1, now);
+                inventory.setString(2, containerId.toString());
+                inventory.setString(3, playerId.toString());
+                inventory.executeUpdate();
+            }
+            return new ClaimAllocation(ClaimAllocation.Kind.EXISTING, contents);
+        }
+        return switch (status) {
+            case "COMPLETED" -> ClaimAllocation.of(ClaimAllocation.Kind.COMPLETED);
+            case "ACTIVE" -> new ClaimAllocation(ClaimAllocation.Kind.EXISTING, contents);
+            default -> ClaimAllocation.of(ClaimAllocation.Kind.PENDING);
+        };
     }
 
     private ContainerRecord findContainerInternal(UUID id) throws SQLException {

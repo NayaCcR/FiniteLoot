@@ -1,6 +1,7 @@
 package vip.naya.finiteloot.gui;
 
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -21,6 +22,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import vip.naya.finiteloot.config.PluginSettings;
+import vip.naya.finiteloot.container.ContainerTarget;
 import vip.naya.finiteloot.data.Database;
 import vip.naya.finiteloot.loot.ItemStacks;
 
@@ -39,6 +41,7 @@ public final class RewardSessionManager implements Listener {
     private final Database database;
     private final java.util.function.Supplier<PluginSettings> settings;
     private final Map<UUID, RewardInventoryHolder> sessions = new ConcurrentHashMap<>();
+    private final Map<UUID, VisualState> visuals = new HashMap<>();
 
     public RewardSessionManager(
             JavaPlugin plugin, Database database, java.util.function.Supplier<PluginSettings> settings) {
@@ -47,9 +50,11 @@ public final class RewardSessionManager implements Listener {
         this.settings = settings;
     }
 
-    public void open(Player player, UUID containerId, ItemStack[] contents, Component title) {
+    public void open(
+            Player player, UUID containerId, ItemStack[] contents, Component title, ContainerTarget target) {
         int size = normalizedSize(contents.length);
-        RewardInventoryHolder holder = new RewardInventoryHolder(containerId, player.getUniqueId());
+        RewardInventoryHolder holder = new RewardInventoryHolder(
+                containerId, player.getUniqueId(), ContainerPresentation.from(target));
         Inventory inventory = Bukkit.createInventory(holder, size, title);
         holder.inventory(inventory);
         ItemStack[] fitted = new ItemStack[size];
@@ -57,6 +62,7 @@ public final class RewardSessionManager implements Listener {
         inventory.setContents(fitted);
         sessions.put(player.getUniqueId(), holder);
         player.openInventory(inventory);
+        startVisual(holder);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -99,7 +105,7 @@ public final class RewardSessionManager implements Listener {
     public void onClose(InventoryCloseEvent event) {
         if (event.getInventory().getHolder() instanceof RewardInventoryHolder holder) {
             sessions.remove(holder.playerId(), holder);
-            save(holder);
+            closeAndSave(holder);
         }
     }
 
@@ -107,13 +113,13 @@ public final class RewardSessionManager implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         RewardInventoryHolder holder = sessions.remove(event.getPlayer().getUniqueId());
         if (holder != null) {
-            save(holder);
+            closeAndSave(holder);
         }
     }
 
     public CompletableFuture<Void> flushAll() {
         CompletableFuture<?>[] futures = sessions.values().stream()
-                .map(this::save)
+                .map(this::closeAndSave)
                 .toArray(CompletableFuture[]::new);
         sessions.clear();
         return CompletableFuture.allOf(futures);
@@ -138,14 +144,63 @@ public final class RewardSessionManager implements Listener {
     }
 
     private void scheduleSave(RewardInventoryHolder holder) {
-        Bukkit.getScheduler().runTask(plugin, () -> save(holder));
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!holder.isClosed()) {
+                save(holder);
+            }
+        });
+    }
+
+    private CompletableFuture<Void> closeAndSave(RewardInventoryHolder holder) {
+        if (!holder.beginClose()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        stopVisual(holder);
+        return save(holder);
+    }
+
+    private void startVisual(RewardInventoryHolder holder) {
+        VisualState visual = visuals.computeIfAbsent(holder.containerId(), ignored ->
+                new VisualState(holder.presentation()));
+        visual.viewers++;
+        holder.activateVisual();
+        if (visual.viewers != 1) {
+            return;
+        }
+        PluginSettings current = settings.get();
+        visual.animationActive = current.playContainerAnimation();
+        visual.soundActive = current.playContainerSounds();
+        if (visual.animationActive) {
+            visual.presentation.animate(true);
+        }
+        if (visual.soundActive) {
+            visual.presentation.playSound(true);
+        }
+    }
+
+    private void stopVisual(RewardInventoryHolder holder) {
+        if (!holder.deactivateVisual()) {
+            return;
+        }
+        VisualState visual = visuals.get(holder.containerId());
+        if (visual == null || --visual.viewers > 0) {
+            return;
+        }
+        visuals.remove(holder.containerId());
+        if (visual.animationActive) {
+            visual.presentation.animate(false);
+        }
+        if (visual.soundActive) {
+            visual.presentation.playSound(false);
+        }
     }
 
     private CompletableFuture<Void> save(RewardInventoryHolder holder) {
         Inventory inventory = holder.getInventory();
         byte[] bytes = ItemStacks.serialize(inventory.getContents());
-        boolean empty = ItemStacks.isEmpty(inventory.getContents());
-        return database.saveInventory(holder.containerId(), holder.playerId(), bytes, empty)
+        boolean completed = settings.get().preventItemInsertion()
+                && ItemStacks.isEmpty(inventory.getContents());
+        return database.saveInventory(holder.containerId(), holder.playerId(), bytes, completed)
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
                         plugin.getLogger().log(Level.SEVERE, "Failed to save personal loot inventory", throwable);
@@ -156,5 +211,16 @@ public final class RewardSessionManager implements Listener {
     private int normalizedSize(int requested) {
         int bounded = Math.max(9, Math.min(54, requested));
         return ((bounded + 8) / 9) * 9;
+    }
+
+    private static final class VisualState {
+        private final ContainerPresentation presentation;
+        private int viewers;
+        private boolean animationActive;
+        private boolean soundActive;
+
+        private VisualState(ContainerPresentation presentation) {
+            this.presentation = presentation;
+        }
     }
 }

@@ -21,18 +21,19 @@ class DatabaseTest {
         UUID firstPlayer = UUID.randomUUID();
         try (Database database = open(path)) {
             database.upsertContainer(container(containerId, 1)).get(5, TimeUnit.SECONDS);
-            ClaimAllocation first = database.allocateClaim(containerId, firstPlayer, "first", true)
+            ClaimAllocation first = database.allocateClaim(containerId, firstPlayer, "first", true, false)
                     .get(5, TimeUnit.SECONDS);
             assertEquals(ClaimAllocation.Kind.NEW, first.kind());
             byte[] inventory = {1, 2, 3};
             database.finalizeClaim(containerId, firstPlayer, inventory, false).get(5, TimeUnit.SECONDS);
 
-            ClaimAllocation repeated = database.allocateClaim(containerId, firstPlayer, "first", true)
+            ClaimAllocation repeated = database.allocateClaim(containerId, firstPlayer, "first", true, false)
                     .get(5, TimeUnit.SECONDS);
             assertEquals(ClaimAllocation.Kind.EXISTING, repeated.kind());
             assertEquals(List.of((byte) 1, (byte) 2, (byte) 3), bytes(repeated.contents()));
 
-            ClaimAllocation rejected = database.allocateClaim(containerId, UUID.randomUUID(), "second", true)
+            ClaimAllocation rejected = database.allocateClaim(
+                            containerId, UUID.randomUUID(), "second", true, false)
                     .get(5, TimeUnit.SECONDS);
             assertEquals(ClaimAllocation.Kind.EXHAUSTED, rejected.kind());
         }
@@ -47,7 +48,7 @@ class DatabaseTest {
             List<CompletableFuture<ClaimAllocation>> attempts = new ArrayList<>();
             for (int index = 0; index < 24; index++) {
                 attempts.add(database.allocateClaim(
-                        containerId, UUID.randomUUID(), "player-" + index, true));
+                        containerId, UUID.randomUUID(), "player-" + index, true, false));
             }
             CompletableFuture.allOf(attempts.toArray(CompletableFuture[]::new)).get(10, TimeUnit.SECONDS);
             long winners = attempts.stream().map(CompletableFuture::join)
@@ -66,11 +67,12 @@ class DatabaseTest {
         UUID playerId = UUID.randomUUID();
         try (Database database = open(path)) {
             database.upsertContainer(container(containerId, 3)).get(5, TimeUnit.SECONDS);
-            database.allocateClaim(containerId, playerId, "persistent", true).get(5, TimeUnit.SECONDS);
+            database.allocateClaim(containerId, playerId, "persistent", true, false)
+                    .get(5, TimeUnit.SECONDS);
             database.finalizeClaim(containerId, playerId, new byte[] {9, 8, 7}, false).get(5, TimeUnit.SECONDS);
         }
         try (Database reopened = open(path)) {
-            ClaimAllocation restored = reopened.allocateClaim(containerId, playerId, "persistent", true)
+            ClaimAllocation restored = reopened.allocateClaim(containerId, playerId, "persistent", true, false)
                     .get(5, TimeUnit.SECONDS);
             assertEquals(ClaimAllocation.Kind.EXISTING, restored.kind());
             assertEquals(List.of((byte) 9, (byte) 8, (byte) 7), bytes(restored.contents()));
@@ -99,6 +101,28 @@ class DatabaseTest {
                 var result = statement.executeQuery("SELECT MAX(version) FROM schema_version")) {
             result.next();
             assertEquals(2, result.getInt(1));
+        }
+    }
+
+    @Test
+    void completedInventoryCanBecomePersonalStorageWithoutAnotherClaim() throws Exception {
+        Path path = testPath("reactivate");
+        UUID containerId = UUID.randomUUID();
+        UUID playerId = UUID.randomUUID();
+        try (Database database = open(path)) {
+            database.upsertContainer(container(containerId, 1)).get(5, TimeUnit.SECONDS);
+            assertEquals(ClaimAllocation.Kind.NEW,
+                    database.allocateClaim(containerId, playerId, "storage", true, false)
+                            .get(5, TimeUnit.SECONDS).kind());
+            database.finalizeClaim(containerId, playerId, new byte[] {0}, true)
+                    .get(5, TimeUnit.SECONDS);
+            assertEquals(ClaimAllocation.Kind.COMPLETED,
+                    database.allocateClaim(containerId, playerId, "storage", true, false)
+                            .get(5, TimeUnit.SECONDS).kind());
+            assertEquals(ClaimAllocation.Kind.EXISTING,
+                    database.allocateClaim(containerId, playerId, "storage", true, true)
+                            .get(5, TimeUnit.SECONDS).kind());
+            assertEquals(1, database.findContainer(containerId).get(5, TimeUnit.SECONDS).claimCount());
         }
     }
 

@@ -54,7 +54,8 @@ public final class ClaimController {
                         ? database.upsertContainer(createRecord(target))
                         : java.util.concurrent.CompletableFuture.completedFuture(existing))
                 .thenCompose(record -> database.allocateClaim(
-                                record.id(), player.getUniqueId(), player.getName(), shouldCount(player))
+                                record.id(), player.getUniqueId(), player.getName(), shouldCount(player),
+                                !settings.get().preventItemInsertion())
                         .thenCompose(allocation -> database.findContainer(record.id())
                                 .thenApply(latest -> new AllocationWithRecord(
                                         latest == null ? record : latest, allocation))))
@@ -80,7 +81,7 @@ public final class ClaimController {
                     messages.get().send(player, "database-error");
                     return;
                 }
-                openInventory(player, record, ItemStacks.deserialize(allocation.contents()));
+                openInventory(player, target, record, ItemStacks.deserialize(allocation.contents()));
             }
             case COMPLETED -> {
                 inFlight.remove(operationKey);
@@ -115,7 +116,8 @@ public final class ClaimController {
         }
         byte[] bytes = ItemStacks.serialize(generated);
         boolean empty = ItemStacks.isEmpty(generated);
-        database.finalizeClaim(record.id(), player.getUniqueId(), bytes, empty).whenComplete((ignored, throwable) -> {
+        boolean completed = empty && settings.get().preventItemInsertion();
+        database.finalizeClaim(record.id(), player.getUniqueId(), bytes, completed).whenComplete((ignored, throwable) -> {
             if (throwable != null) {
                 database.releasePendingClaim(record.id(), player.getUniqueId());
             }
@@ -127,10 +129,10 @@ public final class ClaimController {
                     }
                     return;
                 }
-                if (empty) {
+                if (completed) {
                     messages.get().send(player, "completed");
                 } else {
-                    openInventory(player, record, generated);
+                    openInventory(player, target, record, generated);
                 }
             });
         });
@@ -156,8 +158,9 @@ public final class ClaimController {
         return !(current.adminBypassCounts() && player.hasPermission("finiteloot.bypass"));
     }
 
-    private void openInventory(Player player, ContainerRecord record, ItemStack[] contents) {
-        sessions.open(player, record.id(), contents, title());
+    private void openInventory(
+            Player player, ContainerTarget target, ContainerRecord record, ItemStack[] contents) {
+        sessions.open(player, record.id(), contents, title(), target);
         PluginSettings current = settings.get();
         if (current.showRemainingClaims()) {
             int remaining = Math.max(0, record.maxClaims() - record.claimCount());

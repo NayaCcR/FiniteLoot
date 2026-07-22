@@ -5,7 +5,17 @@ plugins {
 }
 
 group = "vip.naya.finiteloot"
-version = "1.0.0"
+
+val versionLine = providers.gradleProperty("versionLine").get()
+val versionCommitOffset = providers.gradleProperty("versionCommitOffset").get().toInt()
+val gitCommitCount = providers.exec {
+    commandLine("git", "rev-list", "--count", "HEAD")
+}.standardOutput.asText.get().trim().toInt()
+val gitDirty = providers.exec {
+    commandLine("git", "status", "--porcelain")
+}.standardOutput.asText.get().isNotBlank()
+val automaticPatch = (gitCommitCount - versionCommitOffset).coerceAtLeast(0)
+version = "$versionLine.$automaticPatch${if (gitDirty) "-dev" else ""}"
 
 repositories {
     mavenCentral()

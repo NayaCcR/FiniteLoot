@@ -19,6 +19,9 @@ class PluginSettingsTest {
         assertEquals(2, settings.maxClaimsFor("minecraft:chests/ancient_city"));
         assertEquals(3, settings.maxClaimsFor("minecraft:chests/shipwreck_treasure"));
         assertTrue(settings.showRemainingClaims());
+        assertTrue(settings.playContainerAnimation());
+        assertTrue(settings.playContainerSounds());
+        assertFalse(settings.preventItemInsertion());
     }
 
     @Test
@@ -28,5 +31,14 @@ class PluginSettingsTest {
         configuration.set("exhausted-action", "DENY");
         configuration.set("show-remaining-claims", false);
         assertFalse(PluginSettings.from(configuration).showRemainingClaims());
+    }
+
+    @Test
+    void itemInsertionCanBePreventedExplicitly() {
+        YamlConfiguration configuration = new YamlConfiguration();
+        configuration.set("per-player-limit", 1);
+        configuration.set("exhausted-action", "DENY");
+        configuration.set("prevent-item-insertion", true);
+        assertTrue(PluginSettings.from(configuration).preventItemInsertion());
     }
 }

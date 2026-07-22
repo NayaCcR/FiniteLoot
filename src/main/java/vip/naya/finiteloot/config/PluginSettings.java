@@ -12,6 +12,8 @@ import org.bukkit.configuration.file.FileConfiguration;
 public record PluginSettings(
         int defaultMaxClaims,
         boolean showRemainingClaims,
+        boolean playContainerAnimation,
+        boolean playContainerSounds,
         boolean preventItemInsertion,
         boolean preventHopperExtraction,
         boolean preventBreaking,
@@ -49,7 +51,9 @@ public record PluginSettings(
         return new PluginSettings(
                 maxClaims,
                 config.getBoolean("show-remaining-claims", true),
-                config.getBoolean("prevent-item-insertion", true),
+                config.getBoolean("play-container-animation", true),
+                config.getBoolean("play-container-sounds", true),
+                config.getBoolean("prevent-item-insertion", false),
                 config.getBoolean("prevent-hopper-extraction", true),
                 config.getBoolean("prevent-breaking", true),
                 config.getBoolean("prevent-explosions", true),

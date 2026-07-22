@@ -1,17 +1,57 @@
+# Maximum number of different counted players who may claim a newly discovered container.
+# 新发现容器允许的全服计数玩家领取次数上限。
 default-max-claims: 3
+# Show the current remaining global claim slots in chat when a personal inventory opens.
+# 打开个人奖励库存时，是否在聊天框显示当前剩余全服领取次数。
 show-remaining-claims: true
+# Play the real container lid animation when the first viewer opens and the last viewer closes.
+# 首位玩家打开、最后一位玩家关闭时，是否播放世界容器的真实开合动画。
+play-container-animation: true
+# Play the matching vanilla open/close sound for chests, copper chests, barrels, and shulker boxes.
+# 箱子、铜箱、木桶和潜影盒是否播放对应的原版开合声音。
+play-container-sounds: true
+# FiniteLoot enforces one claim record per player; this value must remain 1.
+# FiniteLoot 强制每名玩家每个容器只能有一条领取记录，此值必须保持为 1。
 per-player-limit: 1
+# Action for a container with no counted slots left. Currently only DENY is supported.
+# 容器没有剩余计数名额时的动作，目前仅支持 DENY（拒绝打开）。
 exhausted-action: DENY
-prevent-item-insertion: true
+# Allow players to put items into their own persistent personal inventory.
+# 是否允许玩家向自己的持久化个人库存放入物品。
+prevent-item-insertion: false
+# Prevent hoppers and hopper minecarts from extracting from managed or eligible containers.
+# 是否阻止漏斗和漏斗矿车从受管理或可识别容器中抽取物品。
 prevent-hopper-extraction: true
+# Prevent players from breaking managed or eligible containers.
+# 是否阻止玩家破坏受管理或可识别容器。
 prevent-breaking: true
+# Remove managed or eligible containers from explosion block lists.
+# 是否从爆炸影响方块列表中移除受管理或可识别容器。
 prevent-explosions: true
+# Count Creative-mode players against the global limit when true.
+# 为 true 时，创造模式玩家领取会消耗全服名额。
 count-creative-players: false
+# Let players with finiteloot.bypass avoid consuming a global slot when true.
+# 为 true 时，拥有 finiteloot.bypass 权限的玩家领取不会消耗全服名额。
 admin-bypass-counts: false
+# World names excluded from automatic FiniteLoot interaction handling.
+# 不参与自动 FiniteLoot 交互处理的世界名称列表。
 excluded-worlds: []
+# Message language. Supported values are zh_CN and en_US.
+# 消息语言，支持 zh_CN 和 en_US。
 language: zh_CN
+# Per-LootTable global claim limits; unspecified tables use default-max-claims.
+# 按 LootTable 覆盖全服领取上限；未列出的 LootTable 使用 default-max-claims。
 loot-table-overrides:
+  # End City treasure: two counted players.
+  # 末地城宝箱：允许两名计数玩家领取。
   minecraft:chests/end_city_treasure: 2
+  # Ancient City: two counted players.
+  # 远古城市：允许两名计数玩家领取。
   minecraft:chests/ancient_city: 2
+  # Dungeon: five counted players.
+  # 地牢：允许五名计数玩家领取。
   minecraft:chests/simple_dungeon: 5
+  # Abandoned Mineshaft: four counted players.
+  # 废弃矿井：允许四名计数玩家领取。
   minecraft:chests/abandoned_mineshaft: 4
