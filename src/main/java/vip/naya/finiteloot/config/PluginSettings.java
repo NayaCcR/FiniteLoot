@@ -15,6 +15,10 @@ public record PluginSettings(
         boolean playContainerAnimation,
         boolean playContainerSounds,
         boolean preventItemInsertion,
+        boolean completedContainerBecomesNormal,
+        FinalClaimAction finalClaimAction,
+        boolean clearPersonalInventoriesOnFinalClaim,
+        boolean showFinalClaimMessage,
         boolean preventHopperExtraction,
         boolean preventBreaking,
         boolean preventExplosions,
@@ -33,6 +37,16 @@ public record PluginSettings(
         String exhaustedAction = config.getString("exhausted-action", "DENY");
         if (!"DENY".equalsIgnoreCase(exhaustedAction)) {
             throw new IllegalArgumentException("Only exhausted-action: DENY is supported");
+        }
+
+        String finalClaimActionName = config.getString("final-claim-action", "VANILLA_CONTAINER");
+        FinalClaimAction finalClaimAction;
+        try {
+            finalClaimAction = FinalClaimAction.valueOf(finalClaimActionName.toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(
+                    "Unsupported final-claim-action: " + finalClaimActionName
+                            + " (use VANILLA_CONTAINER or PERSONAL)", exception);
         }
 
         Set<String> excluded = new HashSet<>();
@@ -54,6 +68,10 @@ public record PluginSettings(
                 config.getBoolean("play-container-animation", true),
                 config.getBoolean("play-container-sounds", true),
                 config.getBoolean("prevent-item-insertion", false),
+                config.getBoolean("completed-container-becomes-normal", true),
+                finalClaimAction,
+                config.getBoolean("clear-personal-inventories-on-final-claim", true),
+                config.getBoolean("show-final-claim-message", true),
                 config.getBoolean("prevent-hopper-extraction", true),
                 config.getBoolean("prevent-breaking", true),
                 config.getBoolean("prevent-explosions", true),

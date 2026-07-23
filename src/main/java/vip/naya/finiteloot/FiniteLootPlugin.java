@@ -54,7 +54,7 @@ public final class FiniteLootPlugin extends JavaPlugin {
         sessions = new RewardSessionManager(this, database, this::settings);
         AdminActions adminActions = new AdminActions(this, database, containers, sessions, this::messages);
         ClaimController claimController = new ClaimController(
-                this, database, sessions, new LootGenerator(), this::settings, this::messages);
+                this, database, containers, sessions, new LootGenerator(), this::settings, this::messages);
         WorldListener worldListener = new WorldListener(containers, claimController, adminActions, this::settings);
         Bukkit.getPluginManager().registerEvents(sessions, this);
         Bukkit.getPluginManager().registerEvents(worldListener, this);

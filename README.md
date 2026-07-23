@@ -19,6 +19,10 @@ play-container-sounds: true
 per-player-limit: 1
 exhausted-action: DENY
 prevent-item-insertion: false
+completed-container-becomes-normal: true
+final-claim-action: VANILLA_CONTAINER
+clear-personal-inventories-on-final-claim: true
+show-final-claim-message: true
 prevent-hopper-extraction: true
 prevent-breaking: true
 prevent-explosions: true

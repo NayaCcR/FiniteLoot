@@ -8,8 +8,10 @@ import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import vip.naya.finiteloot.config.FinalClaimAction;
 import vip.naya.finiteloot.config.Messages;
 import vip.naya.finiteloot.config.PluginSettings;
+import vip.naya.finiteloot.container.ContainerManager;
 import vip.naya.finiteloot.container.ContainerTarget;
 import vip.naya.finiteloot.data.ClaimAllocation;
 import vip.naya.finiteloot.data.ContainerRecord;
@@ -21,21 +23,25 @@ import vip.naya.finiteloot.loot.LootGenerator;
 public final class ClaimController {
     private final JavaPlugin plugin;
     private final Database database;
+    private final ContainerManager containers;
     private final RewardSessionManager sessions;
     private final LootGenerator generator;
     private final java.util.function.Supplier<PluginSettings> settings;
     private final java.util.function.Supplier<Messages> messages;
     private final Set<String> inFlight = ConcurrentHashMap.newKeySet();
+    private final Set<java.util.UUID> finalizingContainers = ConcurrentHashMap.newKeySet();
 
     public ClaimController(
             JavaPlugin plugin,
             Database database,
+            ContainerManager containers,
             RewardSessionManager sessions,
             LootGenerator generator,
             java.util.function.Supplier<PluginSettings> settings,
             java.util.function.Supplier<Messages> messages) {
         this.plugin = plugin;
         this.database = database;
+        this.containers = containers;
         this.sessions = sessions;
         this.generator = generator;
         this.settings = settings;
@@ -43,28 +49,31 @@ public final class ClaimController {
     }
 
     public void open(Player player, ContainerTarget target) {
-        String operationKey = target.id() + ":" + player.getUniqueId();
-        if (!inFlight.add(operationKey)) {
-            messages.get().send(player, "loading");
+        if (finalizingContainers.contains(target.id())) {
             return;
         }
-        messages.get().send(player, "loading");
+        String operationKey = target.id() + ":" + player.getUniqueId();
+        if (!inFlight.add(operationKey)) {
+            return;
+        }
+        boolean counted = shouldCount(player);
         database.findContainer(target.id())
                 .thenCompose(existing -> existing == null
                         ? database.upsertContainer(createRecord(target))
                         : java.util.concurrent.CompletableFuture.completedFuture(existing))
                 .thenCompose(record -> database.allocateClaim(
-                                record.id(), player.getUniqueId(), player.getName(), shouldCount(player),
-                                !settings.get().preventItemInsertion())
+                                record.id(), player.getUniqueId(), player.getName(), counted,
+                                shouldReopenCompleted())
                         .thenCompose(allocation -> database.findContainer(record.id())
                                 .thenApply(latest -> new AllocationWithRecord(
-                                        latest == null ? record : latest, allocation))))
+                                        latest == null ? record : latest, allocation, counted))))
                 .whenComplete((result, throwable) -> runMain(() -> {
                     if (throwable != null) {
                         fail(player, operationKey, throwable);
                         return;
                     }
-                    handleAllocation(player, target, result.record(), result.allocation(), operationKey);
+                    handleAllocation(player, target, result.record(), result.allocation(),
+                            result.counted(), operationKey);
                 }));
     }
 
@@ -73,19 +82,36 @@ public final class ClaimController {
             ContainerTarget target,
             ContainerRecord record,
             ClaimAllocation allocation,
+            boolean counted,
             String operationKey) {
         switch (allocation.kind()) {
             case EXISTING -> {
-                inFlight.remove(operationKey);
                 if (allocation.contents() == null) {
+                    inFlight.remove(operationKey);
                     messages.get().send(player, "database-error");
                     return;
                 }
-                openInventory(player, target, record, ItemStacks.deserialize(allocation.contents()));
+                ItemStack[] contents = ItemStacks.deserialize(allocation.contents());
+                if (isFinalVanillaClaim(record, counted)) {
+                    recoverFinalVanilla(player, target, record, contents, operationKey);
+                } else if (isPersonalCompletionEnabled() && ItemStacks.isEmpty(contents)) {
+                    completeAndOpenNormal(player, target, record, allocation.contents(), operationKey);
+                } else {
+                    inFlight.remove(operationKey);
+                    openInventory(player, target, record, contents);
+                }
             }
             case COMPLETED -> {
-                inFlight.remove(operationKey);
-                messages.get().send(player, "completed");
+                if (isFinalVanillaClaim(record, counted)) {
+                    recoverFinalVanilla(player, target, record,
+                            new ItemStack[target.sourceInventory().getSize()], operationKey);
+                } else if (isPersonalCompletionEnabled()) {
+                    inFlight.remove(operationKey);
+                    openNormalInventory(player, target);
+                } else {
+                    inFlight.remove(operationKey);
+                    messages.get().send(player, "completed");
+                }
             }
             case EXHAUSTED -> {
                 inFlight.remove(operationKey);
@@ -99,7 +125,13 @@ public final class ClaimController {
                 inFlight.remove(operationKey);
                 messages.get().send(player, "database-error");
             }
-            case NEW -> persistNewInventory(player, target, record, operationKey);
+            case NEW -> {
+                if (isFinalVanillaClaim(record, counted)) {
+                    persistFinalVanillaInventory(player, target, record, operationKey);
+                } else {
+                    persistNewInventory(player, target, record, operationKey);
+                }
+            }
             default -> throw new IllegalStateException("Unhandled allocation " + allocation.kind());
         }
     }
@@ -116,7 +148,11 @@ public final class ClaimController {
         }
         byte[] bytes = ItemStacks.serialize(generated);
         boolean empty = ItemStacks.isEmpty(generated);
-        boolean completed = empty && settings.get().preventItemInsertion();
+        PluginSettings current = settings.get();
+        boolean personalCompletion = current.finalClaimAction() == FinalClaimAction.PERSONAL
+                && current.completedContainerBecomesNormal();
+        boolean completed = empty
+                && (current.preventItemInsertion() || personalCompletion);
         database.finalizeClaim(record.id(), player.getUniqueId(), bytes, completed).whenComplete((ignored, throwable) -> {
             if (throwable != null) {
                 database.releasePendingClaim(record.id(), player.getUniqueId());
@@ -130,7 +166,11 @@ public final class ClaimController {
                     return;
                 }
                 if (completed) {
-                    messages.get().send(player, "completed");
+                    if (isPersonalCompletionEnabled()) {
+                        openNormalInventory(player, target);
+                    } else {
+                        messages.get().send(player, "completed");
+                    }
                 } else {
                     openInventory(player, target, record, generated);
                 }
@@ -156,6 +196,123 @@ public final class ClaimController {
             return false;
         }
         return !(current.adminBypassCounts() && player.hasPermission("finiteloot.bypass"));
+    }
+
+    private boolean shouldReopenCompleted() {
+        PluginSettings current = settings.get();
+        return !current.preventItemInsertion()
+                && (current.finalClaimAction() == FinalClaimAction.VANILLA_CONTAINER
+                        || !current.completedContainerBecomesNormal());
+    }
+
+    private boolean isPersonalCompletionEnabled() {
+        PluginSettings current = settings.get();
+        return current.finalClaimAction() == FinalClaimAction.PERSONAL
+                && current.completedContainerBecomesNormal();
+    }
+
+    private boolean isFinalVanillaClaim(ContainerRecord record, boolean counted) {
+        return counted
+                && settings.get().finalClaimAction() == FinalClaimAction.VANILLA_CONTAINER
+                && record.claimCount() >= record.maxClaims();
+    }
+
+    private void openNormalInventory(Player player, ContainerTarget target) {
+        containers.prepareNormalInventory(target);
+        player.openInventory(target.sourceInventory());
+    }
+
+    private void completeAndOpenNormal(
+            Player player,
+            ContainerTarget target,
+            ContainerRecord record,
+            byte[] contents,
+            String operationKey) {
+        database.saveInventory(record.id(), player.getUniqueId(), contents, true)
+                .whenComplete((ignored, throwable) -> runMain(() -> {
+                    inFlight.remove(operationKey);
+                    if (throwable != null) {
+                        fail(player, operationKey, throwable);
+                    } else if (player.isOnline()) {
+                        openNormalInventory(player, target);
+                    }
+                }));
+    }
+
+    private void persistFinalVanillaInventory(
+            Player player, ContainerTarget target, ContainerRecord record, String operationKey) {
+        final ItemStack[] generated;
+        try {
+            generated = generator.generate(record, target, player);
+        } catch (RuntimeException exception) {
+            database.releasePendingClaim(record.id(), player.getUniqueId());
+            fail(player, operationKey, exception);
+            return;
+        }
+        finalizingContainers.add(record.id());
+        byte[] bytes = ItemStacks.serialize(generated);
+        database.finalizeClaim(record.id(), player.getUniqueId(), bytes, false)
+                .whenComplete((ignored, throwable) -> {
+                    if (throwable != null) {
+                        database.releasePendingClaim(record.id(), player.getUniqueId());
+                        finalizingContainers.remove(record.id());
+                        runMain(() -> fail(player, operationKey, throwable));
+                        return;
+                    }
+                    runMain(() -> transitionToVanilla(player, target, record, generated, operationKey));
+                });
+    }
+
+    private void recoverFinalVanilla(
+            Player player,
+            ContainerTarget target,
+            ContainerRecord record,
+            ItemStack[] contents,
+            String operationKey) {
+        database.isLastCountedClaimant(record.id(), player.getUniqueId())
+                .whenComplete((lastClaimant, throwable) -> runMain(() -> {
+                    if (throwable != null) {
+                        fail(player, operationKey, throwable);
+                    } else if (lastClaimant) {
+                        finalizingContainers.add(record.id());
+                        transitionToVanilla(player, target, record, contents, operationKey);
+                    } else {
+                        inFlight.remove(operationKey);
+                        openInventory(player, target, record, contents);
+                    }
+                }));
+    }
+
+    private void transitionToVanilla(
+            Player player,
+            ContainerTarget target,
+            ContainerRecord record,
+            ItemStack[] contents,
+            String operationKey) {
+        sessions.closeContainerAndSave(record.id()).whenComplete((ignored, throwable) -> runMain(() -> {
+            if (throwable != null) {
+                finalizingContainers.remove(record.id());
+                fail(player, operationKey, throwable);
+                return;
+            }
+            containers.restoreVanillaInventory(target, contents);
+            inFlight.remove(operationKey);
+            finalizingContainers.remove(record.id());
+            if (player.isOnline()) {
+                player.openInventory(target.sourceInventory());
+                if (settings.get().showFinalClaimMessage()) {
+                    messages.get().send(player, "final-claim");
+                }
+            }
+            if (settings.get().clearPersonalInventoriesOnFinalClaim()) {
+                database.removeContainer(record.id()).whenComplete((removed, cleanupFailure) -> {
+                    if (cleanupFailure != null) {
+                        plugin.getLogger().log(Level.SEVERE,
+                                "Failed to clear finalized container data " + record.id(), cleanupFailure);
+                    }
+                });
+            }
+        }));
     }
 
     private void openInventory(
@@ -187,6 +344,6 @@ public final class ClaimController {
         Bukkit.getScheduler().runTask(plugin, runnable);
     }
 
-    private record AllocationWithRecord(ContainerRecord record, ClaimAllocation allocation) {
+    private record AllocationWithRecord(ContainerRecord record, ClaimAllocation allocation, boolean counted) {
     }
 }

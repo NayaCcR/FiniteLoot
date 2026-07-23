@@ -14,6 +14,7 @@ import org.bukkit.block.TileState;
 import org.bukkit.inventory.DoubleChestInventory;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.loot.LootTable;
 import org.bukkit.loot.Lootable;
 import org.bukkit.persistence.PersistentDataType;
@@ -63,6 +64,30 @@ public final class ContainerManager {
                 tile.update(true, false);
             }
         }
+    }
+
+    public void prepareNormalInventory(ContainerTarget target) {
+        boolean hasOriginalLootTable = target.tiles().stream()
+                .filter(Lootable.class::isInstance)
+                .map(Lootable.class::cast)
+                .anyMatch(lootable -> lootable.getLootTable() != null);
+        if (hasOriginalLootTable) {
+            clearSource(target);
+        }
+    }
+
+    public void restoreVanillaInventory(ContainerTarget target, ItemStack[] contents) {
+        target.sourceInventory().clear();
+        ItemStack[] fitted = new ItemStack[target.sourceInventory().getSize()];
+        System.arraycopy(contents, 0, fitted, 0, Math.min(contents.length, fitted.length));
+        target.sourceInventory().setContents(fitted);
+        for (TileState tile : target.tiles()) {
+            if (tile instanceof Lootable lootable) {
+                lootable.setLootTable(null);
+                tile.update(true, false);
+            }
+        }
+        removeIdentity(target);
     }
 
     public NamespacedKey idKey() {

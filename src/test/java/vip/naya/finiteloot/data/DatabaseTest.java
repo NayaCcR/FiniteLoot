@@ -2,6 +2,8 @@ package vip.naya.finiteloot.data;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.nio.file.Files;
@@ -123,6 +125,30 @@ class DatabaseTest {
                     database.allocateClaim(containerId, playerId, "storage", true, true)
                             .get(5, TimeUnit.SECONDS).kind());
             assertEquals(1, database.findContainer(containerId).get(5, TimeUnit.SECONDS).claimCount());
+        }
+    }
+
+    @Test
+    void identifiesLastCountedClaimantForVanillaTransition() throws Exception {
+        Path path = testPath("last-claimant");
+        UUID containerId = UUID.randomUUID();
+        UUID firstPlayer = UUID.randomUUID();
+        UUID lastPlayer = UUID.randomUUID();
+        try (Database database = open(path)) {
+            database.upsertContainer(container(containerId, 2)).get(5, TimeUnit.SECONDS);
+            database.allocateClaim(containerId, firstPlayer, "first", true, false)
+                    .get(5, TimeUnit.SECONDS);
+            database.finalizeClaim(containerId, firstPlayer, new byte[] {1}, false)
+                    .get(5, TimeUnit.SECONDS);
+            database.allocateClaim(containerId, lastPlayer, "last", true, false)
+                    .get(5, TimeUnit.SECONDS);
+            database.finalizeClaim(containerId, lastPlayer, new byte[] {2}, false)
+                    .get(5, TimeUnit.SECONDS);
+
+            assertFalse(database.isLastCountedClaimant(containerId, firstPlayer)
+                    .get(5, TimeUnit.SECONDS));
+            assertTrue(database.isLastCountedClaimant(containerId, lastPlayer)
+                    .get(5, TimeUnit.SECONDS));
         }
     }
 

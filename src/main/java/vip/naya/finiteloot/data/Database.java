@@ -300,6 +300,24 @@ public final class Database implements AutoCloseable {
         });
     }
 
+    public CompletableFuture<Boolean> isLastCountedClaimant(UUID containerId, UUID playerId) {
+        return submit(() -> {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT player_uuid FROM claims
+                    WHERE container_id=? AND counted=1
+                    ORDER BY created_at DESC, rowid DESC
+                    LIMIT 1
+                    """)) {
+                statement.setString(1, containerId.toString());
+                try (ResultSet result = statement.executeQuery()) {
+                    return result.next() && playerId.toString().equals(result.getString(1));
+                }
+            } catch (SQLException exception) {
+                throw failure(exception);
+            }
+        });
+    }
+
     public CompletableFuture<ContainerInspection> inspect(UUID containerId) {
         return submit(() -> {
             try {

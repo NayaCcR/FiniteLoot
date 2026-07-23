@@ -18,7 +18,13 @@
 | `show-remaining-claims` | `true` | 打开个人奖励时在聊天显示剩余名额 |
 | `play-container-animation` | `true` | 播放箱子/木桶等容器的开合动画 |
 | `play-container-sounds` | `true` | 播放对应原版开合声音 |
-| `prevent-item-insertion` | `false` | `true` 时禁止向个人库存放入物品 |
+| `prevent-item-insertion` | `false` | `false` 时可反复打开未取空的个人库存并放入物品 |
+| `completed-container-becomes-normal` | `true` | `PERSONAL` 模式下，个人奖励取空后打开普通共享容器 |
+| `final-claim-action` | `VANILLA_CONTAINER` | 最后一个计数名额使用真实容器，或继续使用个人库存 (`PERSONAL`) |
+| `clear-personal-inventories-on-final-claim` | `true` | 恢复原版容器时是否清除此前所有个人库存记录 |
+| `show-final-claim-message` | `true` | 是否显示“这是最后一次领取，容器已恢复为标准奖励箱” |
+
+默认组合会让前面的领取玩家反复打开并存放物品；最后一个计数名额会把最后一次奖励写入真实容器并恢复原版行为。将 `final-claim-action` 设为 `PERSONAL` 可保留最后一次个人库存模式；将 `prevent-item-insertion` 设为 `true` 则恢复为只能取出奖励的模式。
 
 ## 保护与计数
 

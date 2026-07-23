@@ -1,6 +1,9 @@
 package vip.naya.finiteloot.config;
 
 import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -20,6 +23,14 @@ public final class Messages {
             plugin.saveResource(resource, false);
         }
         messages = YamlConfiguration.loadConfiguration(file);
+        try (InputStream stream = plugin.getResource(resource)) {
+            if (stream != null) {
+                messages.setDefaults(YamlConfiguration.loadConfiguration(
+                        new InputStreamReader(stream, StandardCharsets.UTF_8)));
+            }
+        } catch (java.io.IOException exception) {
+            plugin.getLogger().warning("Failed to load built-in language defaults: " + exception.getMessage());
+        }
     }
 
     public Component component(String key) {
@@ -46,4 +57,3 @@ public final class Messages {
         return value.replace("<", "\\<").replace(">", "\\>");
     }
 }
-

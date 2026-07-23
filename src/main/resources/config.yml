@@ -16,9 +16,25 @@ per-player-limit: 1
 # Action for a container with no counted slots left. Currently only DENY is supported.
 # 容器没有剩余计数名额时的动作，目前仅支持 DENY（拒绝打开）。
 exhausted-action: DENY
-# Allow players to put items into their own persistent personal inventory.
-# 是否允许玩家向自己的持久化个人库存放入物品。
+# Prevent insertion into personal loot when true; false allows temporary personal storage.
+# 为 true 时禁止放入个人奖励库存；为 false 时可将未取空的个人库存作为临时储物箱。
 prevent-item-insertion: false
+# In PERSONAL final-claim mode, open the shared world container after a player empties personal loot.
+# 在最后一次领取使用 PERSONAL 模式时，玩家取空个人奖励后是否打开普通共享容器。
+completed-container-becomes-normal: true
+# Action when the final counted claim is allocated.
+# 最后一个计数领取名额被占用后的处理方式。
+# VANILLA_CONTAINER: write the final reward into the real container and restore vanilla behavior.
+# VANILLA_CONTAINER：将最后一次奖励写入真实容器并恢复原版行为。
+# PERSONAL: keep the final claim as a personal inventory.
+# PERSONAL：最后一次领取仍使用个人奖励库存。
+final-claim-action: VANILLA_CONTAINER
+# Delete all previous personal inventories when the final claim restores vanilla behavior.
+# 恢复原版容器时，是否清除此前所有玩家的个人奖励库存记录。
+clear-personal-inventories-on-final-claim: true
+# Show the final-claim transition message to the player who receives the last counted claim.
+# 是否向获得最后一个计数名额的玩家显示恢复原版容器提示。
+show-final-claim-message: true
 # Prevent hoppers and hopper minecarts from extracting from managed or eligible containers.
 # 是否阻止漏斗和漏斗矿车从受管理或可识别容器中抽取物品。
 prevent-hopper-extraction: true

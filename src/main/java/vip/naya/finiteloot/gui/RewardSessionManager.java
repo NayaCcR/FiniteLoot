@@ -2,6 +2,7 @@ package vip.naya.finiteloot.gui;
 
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -133,6 +134,23 @@ public final class RewardSessionManager implements Listener {
                 .forEach(Player::closeInventory);
     }
 
+    public CompletableFuture<Void> closeContainerAndSave(UUID containerId) {
+        List<RewardInventoryHolder> holders = sessions.values().stream()
+                .filter(holder -> holder.containerId().equals(containerId))
+                .toList();
+        CompletableFuture<?>[] futures = new CompletableFuture<?>[holders.size()];
+        for (int index = 0; index < holders.size(); index++) {
+            RewardInventoryHolder holder = holders.get(index);
+            sessions.remove(holder.playerId(), holder);
+            futures[index] = closeAndSave(holder);
+            Player player = Bukkit.getPlayer(holder.playerId());
+            if (player != null) {
+                player.closeInventory();
+            }
+        }
+        return CompletableFuture.allOf(futures);
+    }
+
     public void closePlayerContainer(UUID playerId, UUID containerId) {
         RewardInventoryHolder holder = sessions.get(playerId);
         if (holder != null && holder.containerId().equals(containerId)) {
@@ -198,8 +216,12 @@ public final class RewardSessionManager implements Listener {
     private CompletableFuture<Void> save(RewardInventoryHolder holder) {
         Inventory inventory = holder.getInventory();
         byte[] bytes = ItemStacks.serialize(inventory.getContents());
-        boolean completed = settings.get().preventItemInsertion()
-                && ItemStacks.isEmpty(inventory.getContents());
+        PluginSettings current = settings.get();
+        boolean personalCompletion = current.finalClaimAction()
+                == vip.naya.finiteloot.config.FinalClaimAction.PERSONAL
+                && current.completedContainerBecomesNormal();
+        boolean completed = ItemStacks.isEmpty(inventory.getContents())
+                && (current.preventItemInsertion() || personalCompletion);
         return database.saveInventory(holder.containerId(), holder.playerId(), bytes, completed)
                 .whenComplete((ignored, throwable) -> {
                     if (throwable != null) {
