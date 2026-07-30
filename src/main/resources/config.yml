@@ -41,6 +41,12 @@ prevent-hopper-extraction: true
 # Prevent players from breaking managed or eligible containers.
 # 是否阻止玩家破坏受管理或可识别容器。
 prevent-breaking: true
+# Let players break fully-claimed containers directly. Such a container reverts to a normal
+# breakable container when next clicked or broken, deleting its remaining database records
+# (including personal inventories players have not emptied yet).
+# 是否允许玩家直接破坏已领取完毕的奖励容器。开启后，这类容器会在下次被点击或破坏时
+# 恢复为普通容器，并删除其残留的数据库记录（包括玩家尚未取空的个人库存），请谨慎开启。
+allow-breaking-exhausted-containers: false
 # Remove managed or eligible containers from explosion block lists.
 # 是否从爆炸影响方块列表中移除受管理或可识别容器。
 prevent-explosions: true

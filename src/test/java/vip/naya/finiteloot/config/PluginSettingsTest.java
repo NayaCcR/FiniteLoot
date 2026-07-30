@@ -26,6 +26,16 @@ class PluginSettingsTest {
         assertEquals(FinalClaimAction.VANILLA_CONTAINER, settings.finalClaimAction());
         assertTrue(settings.clearPersonalInventoriesOnFinalClaim());
         assertTrue(settings.showFinalClaimMessage());
+        assertFalse(settings.allowBreakingExhaustedContainers());
+    }
+
+    @Test
+    void exhaustedContainersCanBecomeBreakable() {
+        YamlConfiguration configuration = new YamlConfiguration();
+        configuration.set("per-player-limit", 1);
+        configuration.set("exhausted-action", "DENY");
+        configuration.set("allow-breaking-exhausted-containers", true);
+        assertTrue(PluginSettings.from(configuration).allowBreakingExhaustedContainers());
     }
 
     @Test

@@ -48,6 +48,12 @@ public final class ContainerManager {
         return !isIgnored(tile) && (readId(tile) != null || lootable.getLootTable() != null);
     }
 
+    public Optional<UUID> existingId(Block block) {
+        return block.getState() instanceof TileState tile
+                ? Optional.ofNullable(readId(tile))
+                : Optional.empty();
+    }
+
     public void removeIdentity(ContainerTarget target) {
         for (TileState tile : target.tiles()) {
             tile.getPersistentDataContainer().remove(containerIdKey);
@@ -74,6 +80,11 @@ public final class ContainerManager {
         if (hasOriginalLootTable) {
             clearSource(target);
         }
+    }
+
+    public void releaseToNormal(ContainerTarget target) {
+        prepareNormalInventory(target);
+        removeIdentity(target);
     }
 
     public void restoreVanillaInventory(ContainerTarget target, ItemStack[] contents) {

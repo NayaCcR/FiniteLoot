@@ -58,9 +58,13 @@ public final class WorldListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
-        if (settings.get().preventBreaking() && containers.isManagedOrEligible(event.getBlock())) {
-            event.setCancelled(true);
+        if (!settings.get().preventBreaking() || !containers.isManagedOrEligible(event.getBlock())) {
+            return;
         }
+        if (claims.releaseExhaustedContainer(event.getBlock())) {
+            return;
+        }
+        event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)

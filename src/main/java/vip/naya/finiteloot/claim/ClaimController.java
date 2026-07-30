@@ -13,6 +13,7 @@ import vip.naya.finiteloot.config.Messages;
 import vip.naya.finiteloot.config.PluginSettings;
 import vip.naya.finiteloot.container.ContainerManager;
 import vip.naya.finiteloot.container.ContainerTarget;
+import vip.naya.finiteloot.container.ExhaustedContainers;
 import vip.naya.finiteloot.data.ClaimAllocation;
 import vip.naya.finiteloot.data.ContainerRecord;
 import vip.naya.finiteloot.data.Database;
@@ -24,6 +25,7 @@ public final class ClaimController {
     private final JavaPlugin plugin;
     private final Database database;
     private final ContainerManager containers;
+    private final ExhaustedContainers exhausted;
     private final RewardSessionManager sessions;
     private final LootGenerator generator;
     private final java.util.function.Supplier<PluginSettings> settings;
@@ -35,6 +37,7 @@ public final class ClaimController {
             JavaPlugin plugin,
             Database database,
             ContainerManager containers,
+            ExhaustedContainers exhausted,
             RewardSessionManager sessions,
             LootGenerator generator,
             java.util.function.Supplier<PluginSettings> settings,
@@ -42,6 +45,7 @@ public final class ClaimController {
         this.plugin = plugin;
         this.database = database;
         this.containers = containers;
+        this.exhausted = exhausted;
         this.sessions = sessions;
         this.generator = generator;
         this.settings = settings;
@@ -84,6 +88,9 @@ public final class ClaimController {
             ClaimAllocation allocation,
             boolean counted,
             String operationKey) {
+        if (record.claimCount() >= record.maxClaims()) {
+            exhausted.markExhausted(record.id());
+        }
         switch (allocation.kind()) {
             case EXISTING -> {
                 if (allocation.contents() == null) {
@@ -115,7 +122,16 @@ public final class ClaimController {
             }
             case EXHAUSTED -> {
                 inFlight.remove(operationKey);
-                messages.get().send(player, "exhausted");
+                if (settings.get().allowBreakingExhaustedContainers()
+                        && !finalizingContainers.contains(record.id())) {
+                    release(target, record.id());
+                    if (player.isOnline()) {
+                        player.openInventory(target.sourceInventory());
+                        messages.get().send(player, "exhausted-released");
+                    }
+                } else {
+                    messages.get().send(player, "exhausted");
+                }
             }
             case PENDING -> {
                 inFlight.remove(operationKey);
@@ -222,6 +238,34 @@ public final class ClaimController {
         player.openInventory(target.sourceInventory());
     }
 
+    public boolean releaseExhaustedContainer(org.bukkit.block.Block block) {
+        if (!settings.get().allowBreakingExhaustedContainers()) {
+            return false;
+        }
+        java.util.UUID id = containers.existingId(block).orElse(null);
+        if (id == null || !exhausted.isExhausted(id) || finalizingContainers.contains(id)) {
+            return false;
+        }
+        java.util.Optional<ContainerTarget> resolved = containers.resolve(block, false);
+        if (resolved.isEmpty()) {
+            return false;
+        }
+        release(resolved.get(), id);
+        return true;
+    }
+
+    private void release(ContainerTarget target, java.util.UUID containerId) {
+        sessions.closeContainer(containerId);
+        containers.releaseToNormal(target);
+        exhausted.clear(containerId);
+        database.removeContainer(containerId).whenComplete((ignored, throwable) -> {
+            if (throwable != null) {
+                plugin.getLogger().log(Level.SEVERE,
+                        "Failed to remove exhausted container data " + containerId, throwable);
+            }
+        });
+    }
+
     private void completeAndOpenNormal(
             Player player,
             ContainerTarget target,
@@ -298,6 +342,7 @@ public final class ClaimController {
             containers.restoreVanillaInventory(target, contents);
             inFlight.remove(operationKey);
             finalizingContainers.remove(record.id());
+            exhausted.clear(record.id());
             if (player.isOnline()) {
                 player.openInventory(target.sourceInventory());
                 if (settings.get().showFinalClaimMessage()) {

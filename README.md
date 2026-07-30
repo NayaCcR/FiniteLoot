@@ -25,6 +25,7 @@ clear-personal-inventories-on-final-claim: true
 show-final-claim-message: true
 prevent-hopper-extraction: true
 prevent-breaking: true
+allow-breaking-exhausted-containers: false
 prevent-explosions: true
 count-creative-players: false
 admin-bypass-counts: false

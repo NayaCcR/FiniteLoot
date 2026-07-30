@@ -152,6 +152,22 @@ class DatabaseTest {
         }
     }
 
+    @Test
+    void listsOnlyFullyClaimedContainers() throws Exception {
+        Path path = testPath("exhausted-scan");
+        UUID exhaustedId = UUID.randomUUID();
+        UUID openId = UUID.randomUUID();
+        UUID playerId = UUID.randomUUID();
+        try (Database database = open(path)) {
+            database.upsertContainer(container(exhaustedId, 1)).get(5, TimeUnit.SECONDS);
+            database.upsertContainer(container(openId, 2)).get(5, TimeUnit.SECONDS);
+            database.allocateClaim(exhaustedId, playerId, "only", true, false).get(5, TimeUnit.SECONDS);
+            database.finalizeClaim(exhaustedId, playerId, new byte[] {1}, false).get(5, TimeUnit.SECONDS);
+            assertEquals(List.of(exhaustedId),
+                    database.listExhaustedContainerIds().get(5, TimeUnit.SECONDS));
+        }
+    }
+
     private Database open(Path path) throws Exception {
         Database database = new Database(path);
         database.initialize();

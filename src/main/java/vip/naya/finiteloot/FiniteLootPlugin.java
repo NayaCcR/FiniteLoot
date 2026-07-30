@@ -18,6 +18,7 @@ import vip.naya.finiteloot.command.FiniteLootCommand;
 import vip.naya.finiteloot.config.Messages;
 import vip.naya.finiteloot.config.PluginSettings;
 import vip.naya.finiteloot.container.ContainerManager;
+import vip.naya.finiteloot.container.ExhaustedContainers;
 import vip.naya.finiteloot.data.Database;
 import vip.naya.finiteloot.gui.RewardSessionManager;
 import vip.naya.finiteloot.listener.WorldListener;
@@ -51,10 +52,12 @@ public final class FiniteLootPlugin extends JavaPlugin {
 
         registerPermissions();
         ContainerManager containers = new ContainerManager(this);
+        ExhaustedContainers exhausted = new ExhaustedContainers();
         sessions = new RewardSessionManager(this, database, this::settings);
-        AdminActions adminActions = new AdminActions(this, database, containers, sessions, this::messages);
+        AdminActions adminActions = new AdminActions(
+                this, database, containers, exhausted, sessions, this::messages);
         ClaimController claimController = new ClaimController(
-                this, database, containers, sessions, new LootGenerator(), this::settings, this::messages);
+                this, database, containers, exhausted, sessions, new LootGenerator(), this::settings, this::messages);
         WorldListener worldListener = new WorldListener(containers, claimController, adminActions, this::settings);
         Bukkit.getPluginManager().registerEvents(sessions, this);
         Bukkit.getPluginManager().registerEvents(worldListener, this);
@@ -66,6 +69,7 @@ public final class FiniteLootPlugin extends JavaPlugin {
         });
 
         Bukkit.getScheduler().runTask(this, this::warnAboutConflicts);
+        scanExhaustedContainers(exhausted);
         getLogger().info("FiniteLoot enabled with database " + getDataFolder().toPath().resolve("data.db"));
     }
 
@@ -131,6 +135,26 @@ public final class FiniteLootPlugin extends JavaPlugin {
         Permission permission = new Permission(name, defaultValue);
         Bukkit.getPluginManager().addPermission(permission);
         return permission;
+    }
+
+    private void scanExhaustedContainers(ExhaustedContainers exhausted) {
+        database.listExhaustedContainerIds().whenComplete((ids, throwable) -> {
+            if (throwable != null) {
+                getLogger().log(Level.WARNING, "Failed to scan for fully-claimed containers", throwable);
+                return;
+            }
+            if (ids.isEmpty()) {
+                return;
+            }
+            exhausted.markAllExhausted(ids);
+            if (settings.allowBreakingExhaustedContainers()) {
+                getLogger().info("Found " + ids.size() + " fully-claimed containers in the database;"
+                        + " each reverts to a normal breakable container when next clicked or broken.");
+            } else {
+                getLogger().info("Found " + ids.size() + " fully-claimed containers in the database that"
+                        + " remain protected; set allow-breaking-exhausted-containers: true to release them.");
+            }
+        });
     }
 
     private void warnAboutConflicts() {

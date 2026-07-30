@@ -32,10 +32,13 @@
 | --- | --- | --- |
 | `prevent-hopper-extraction` | `true` | 阻止漏斗和漏斗矿车抽取奖励 |
 | `prevent-breaking` | `true` | 阻止破坏受管理容器 |
+| `allow-breaking-exhausted-containers` | `false` | 允许直接破坏已领取完毕的容器，点击或破坏时恢复为普通容器 |
 | `prevent-explosions` | `true` | 防止爆炸破坏受管理容器 |
 | `count-creative-players` | `false` | 创造模式玩家是否占用名额 |
 | `admin-bypass-counts` | `false` | 拥有 `finiteloot.bypass` 的管理员是否不占用名额 |
 | `excluded-worlds` | `[]` | 不自动接管容器的世界列表 |
 | `language` | `zh_CN` | 语言文件，支持 `zh_CN` 和 `en_US` |
+
+启动时插件会检查数据库并在日志中给出已领取完毕容器的数量。“最后一次领取恢复原版容器”只在最后一个计数名额被占用或最后一名计数领取者再次开箱时触发，因此旧版本遗留的已领完容器会一直保持保护状态。开启 `allow-breaking-exhausted-containers` 后，这些容器会在下次被点击或破坏时恢复为普通容器并删除数据库记录；若仍有玩家在其个人库存中存放物品，这些记录会被一并清除，请谨慎开启。
 
 修改配置后执行 `/fl reload`。非法值会拒绝重载并保留旧配置。

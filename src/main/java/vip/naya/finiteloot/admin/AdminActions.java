@@ -16,6 +16,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import vip.naya.finiteloot.config.Messages;
 import vip.naya.finiteloot.container.ContainerManager;
 import vip.naya.finiteloot.container.ContainerTarget;
+import vip.naya.finiteloot.container.ExhaustedContainers;
 import vip.naya.finiteloot.data.ContainerInspection;
 import vip.naya.finiteloot.data.ContainerRecord;
 import vip.naya.finiteloot.data.Database;
@@ -26,6 +27,7 @@ public final class AdminActions {
     private final JavaPlugin plugin;
     private final Database database;
     private final ContainerManager containers;
+    private final ExhaustedContainers exhausted;
     private final java.util.function.Supplier<Messages> messages;
     private final RewardSessionManager sessions;
     private final Map<UUID, PendingAction> pending = new ConcurrentHashMap<>();
@@ -34,11 +36,13 @@ public final class AdminActions {
             JavaPlugin plugin,
             Database database,
             ContainerManager containers,
+            ExhaustedContainers exhausted,
             RewardSessionManager sessions,
             java.util.function.Supplier<Messages> messages) {
         this.plugin = plugin;
         this.database = database;
         this.containers = containers;
+        this.exhausted = exhausted;
         this.sessions = sessions;
         this.messages = messages;
     }
@@ -65,10 +69,12 @@ public final class AdminActions {
             case SET -> set(player, target, action.maxClaims());
             case RESET_CONTAINER -> {
                 sessions.closeContainer(target.id());
+                exhausted.clear(target.id());
                 complete(player, database.resetContainer(target.id()), "reset-ok");
             }
             case RESET_PLAYER -> {
                 sessions.closePlayerContainer(action.targetPlayer(), target.id());
+                exhausted.clear(target.id());
                 complete(player, database.resetPlayer(target.id(), action.targetPlayer()), "reset-ok");
             }
             case REMOVE -> remove(player, target);
@@ -138,6 +144,11 @@ public final class AdminActions {
                 }
                 return;
             }
+            if (record.claimCount() >= record.maxClaims()) {
+                exhausted.markExhausted(record.id());
+            } else {
+                exhausted.clear(record.id());
+            }
             if (target.lootTable() == null && hasTemplateItems) {
                 containers.clearSource(target);
             }
@@ -148,6 +159,7 @@ public final class AdminActions {
 
     private void remove(Player player, ContainerTarget target) {
         sessions.closeContainer(target.id());
+        exhausted.clear(target.id());
         database.removeContainer(target.id()).whenComplete((ignored, throwable) -> runMain(() -> {
             if (throwable != null) {
                 fail(player, throwable);
