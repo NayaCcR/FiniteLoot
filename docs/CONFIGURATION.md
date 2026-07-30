@@ -18,6 +18,7 @@
 | `show-remaining-claims` | `true` | 打开个人奖励时在聊天显示剩余名额 |
 | `play-container-animation` | `true` | 播放箱子/木桶等容器的开合动画 |
 | `play-container-sounds` | `true` | 播放对应原版开合声音 |
+| `trigger-piglin-anger` | `true` | 打开受猪灵保护的虚拟容器时触发附近猪灵仇恨 |
 | `prevent-item-insertion` | `false` | `false` 时可反复打开未取空的个人库存并放入物品 |
 | `completed-container-becomes-normal` | `true` | `PERSONAL` 模式下，个人奖励取空后打开普通共享容器 |
 | `final-claim-action` | `VANILLA_CONTAINER` | 最后一个计数名额使用真实容器，或继续使用个人库存 (`PERSONAL`) |

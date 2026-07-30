@@ -21,12 +21,22 @@ class PluginSettingsTest {
         assertTrue(settings.showRemainingClaims());
         assertTrue(settings.playContainerAnimation());
         assertTrue(settings.playContainerSounds());
+        assertTrue(settings.triggerPiglinAnger());
         assertFalse(settings.preventItemInsertion());
         assertTrue(settings.completedContainerBecomesNormal());
         assertEquals(FinalClaimAction.VANILLA_CONTAINER, settings.finalClaimAction());
         assertTrue(settings.clearPersonalInventoriesOnFinalClaim());
         assertTrue(settings.showFinalClaimMessage());
         assertFalse(settings.allowBreakingExhaustedContainers());
+    }
+
+    @Test
+    void piglinAngerCanBeDisabled() {
+        YamlConfiguration configuration = new YamlConfiguration();
+        configuration.set("per-player-limit", 1);
+        configuration.set("exhausted-action", "DENY");
+        configuration.set("trigger-piglin-anger", false);
+        assertFalse(PluginSettings.from(configuration).triggerPiglinAnger());
     }
 
     @Test

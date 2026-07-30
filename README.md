@@ -16,6 +16,7 @@ default-max-claims: 3
 show-remaining-claims: true
 play-container-animation: true
 play-container-sounds: true
+trigger-piglin-anger: true
 per-player-limit: 1
 exhausted-action: DENY
 prevent-item-insertion: false

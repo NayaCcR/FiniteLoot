@@ -10,6 +10,9 @@ play-container-animation: true
 # Play the matching vanilla open/close sound for chests, copper chests, barrels, and shulker boxes.
 # 箱子、铜箱、木桶和潜影盒是否播放对应的原版开合声音。
 play-container-sounds: true
+# Trigger nearby piglin anger when a guarded container is opened through the virtual GUI.
+# 通过虚拟奖励界面打开受猪灵保护的容器时，是否触发附近猪灵的仇恨。
+trigger-piglin-anger: true
 # FiniteLoot enforces one claim record per player; this value must remain 1.
 # FiniteLoot 强制每名玩家每个容器只能有一条领取记录，此值必须保持为 1。
 per-player-limit: 1

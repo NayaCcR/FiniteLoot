@@ -15,6 +15,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import vip.naya.finiteloot.admin.AdminActions;
 import vip.naya.finiteloot.claim.ClaimController;
 import vip.naya.finiteloot.command.FiniteLootCommand;
+import vip.naya.finiteloot.compat.PiglinAngerService;
 import vip.naya.finiteloot.config.Messages;
 import vip.naya.finiteloot.config.PluginSettings;
 import vip.naya.finiteloot.container.ContainerManager;
@@ -22,6 +23,7 @@ import vip.naya.finiteloot.container.ExhaustedContainers;
 import vip.naya.finiteloot.data.Database;
 import vip.naya.finiteloot.gui.RewardSessionManager;
 import vip.naya.finiteloot.listener.WorldListener;
+import vip.naya.finiteloot.loot.LootAdvancementService;
 import vip.naya.finiteloot.loot.LootGenerator;
 
 public final class FiniteLootPlugin extends JavaPlugin {
@@ -29,6 +31,7 @@ public final class FiniteLootPlugin extends JavaPlugin {
     private volatile Messages messages;
     private Database database;
     private RewardSessionManager sessions;
+    private PiglinAngerService piglinAnger;
 
     @Override
     public void onEnable() {
@@ -53,13 +56,16 @@ public final class FiniteLootPlugin extends JavaPlugin {
         registerPermissions();
         ContainerManager containers = new ContainerManager(this);
         ExhaustedContainers exhausted = new ExhaustedContainers();
+        piglinAnger = new PiglinAngerService(this, this::settings);
         sessions = new RewardSessionManager(this, database, this::settings);
         AdminActions adminActions = new AdminActions(
                 this, database, containers, exhausted, sessions, this::messages);
         ClaimController claimController = new ClaimController(
-                this, database, containers, exhausted, sessions, new LootGenerator(), this::settings, this::messages);
+                this, database, containers, exhausted, sessions, new LootGenerator(),
+                new LootAdvancementService(), piglinAnger, this::settings, this::messages);
         WorldListener worldListener = new WorldListener(containers, claimController, adminActions, this::settings);
         Bukkit.getPluginManager().registerEvents(sessions, this);
+        Bukkit.getPluginManager().registerEvents(piglinAnger, this);
         Bukkit.getPluginManager().registerEvents(worldListener, this);
 
         FiniteLootCommand command = new FiniteLootCommand(this, adminActions);
@@ -75,6 +81,9 @@ public final class FiniteLootPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (piglinAnger != null) {
+            piglinAnger.clearAll();
+        }
         if (sessions != null) {
             try {
                 sessions.flushAll().get(10, TimeUnit.SECONDS);

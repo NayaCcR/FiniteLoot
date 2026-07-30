@@ -11,6 +11,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import vip.naya.finiteloot.config.FinalClaimAction;
 import vip.naya.finiteloot.config.Messages;
 import vip.naya.finiteloot.config.PluginSettings;
+import vip.naya.finiteloot.compat.PiglinAngerService;
 import vip.naya.finiteloot.container.ContainerManager;
 import vip.naya.finiteloot.container.ContainerTarget;
 import vip.naya.finiteloot.container.ExhaustedContainers;
@@ -19,6 +20,7 @@ import vip.naya.finiteloot.data.ContainerRecord;
 import vip.naya.finiteloot.data.Database;
 import vip.naya.finiteloot.gui.RewardSessionManager;
 import vip.naya.finiteloot.loot.ItemStacks;
+import vip.naya.finiteloot.loot.LootAdvancementService;
 import vip.naya.finiteloot.loot.LootGenerator;
 
 public final class ClaimController {
@@ -28,6 +30,8 @@ public final class ClaimController {
     private final ExhaustedContainers exhausted;
     private final RewardSessionManager sessions;
     private final LootGenerator generator;
+    private final LootAdvancementService lootAdvancements;
+    private final PiglinAngerService piglinAnger;
     private final java.util.function.Supplier<PluginSettings> settings;
     private final java.util.function.Supplier<Messages> messages;
     private final Set<String> inFlight = ConcurrentHashMap.newKeySet();
@@ -40,6 +44,8 @@ public final class ClaimController {
             ExhaustedContainers exhausted,
             RewardSessionManager sessions,
             LootGenerator generator,
+            LootAdvancementService lootAdvancements,
+            PiglinAngerService piglinAnger,
             java.util.function.Supplier<PluginSettings> settings,
             java.util.function.Supplier<Messages> messages) {
         this.plugin = plugin;
@@ -48,6 +54,8 @@ public final class ClaimController {
         this.exhausted = exhausted;
         this.sessions = sessions;
         this.generator = generator;
+        this.lootAdvancements = lootAdvancements;
+        this.piglinAnger = piglinAnger;
         this.settings = settings;
         this.messages = messages;
     }
@@ -98,6 +106,7 @@ public final class ClaimController {
                     messages.get().send(player, "database-error");
                     return;
                 }
+                lootAdvancements.award(player, record.lootTable());
                 ItemStack[] contents = ItemStacks.deserialize(allocation.contents());
                 if (isFinalVanillaClaim(record, counted)) {
                     recoverFinalVanilla(player, target, record, contents, operationKey);
@@ -109,6 +118,7 @@ public final class ClaimController {
                 }
             }
             case COMPLETED -> {
+                lootAdvancements.award(player, record.lootTable());
                 if (isFinalVanillaClaim(record, counted)) {
                     recoverFinalVanilla(player, target, record,
                             new ItemStack[target.sourceInventory().getSize()], operationKey);
@@ -127,6 +137,7 @@ public final class ClaimController {
                     release(target, record.id());
                     if (player.isOnline()) {
                         player.openInventory(target.sourceInventory());
+                        piglinAnger.reactToOpen(player, target);
                         messages.get().send(player, "exhausted-released");
                     }
                 } else {
@@ -181,6 +192,7 @@ public final class ClaimController {
                     }
                     return;
                 }
+                lootAdvancements.award(player, record.lootTable());
                 if (completed) {
                     if (isPersonalCompletionEnabled()) {
                         openNormalInventory(player, target);
@@ -236,6 +248,7 @@ public final class ClaimController {
     private void openNormalInventory(Player player, ContainerTarget target) {
         containers.prepareNormalInventory(target);
         player.openInventory(target.sourceInventory());
+        piglinAnger.reactToOpen(player, target);
     }
 
     public boolean releaseExhaustedContainer(org.bukkit.block.Block block) {
@@ -303,7 +316,12 @@ public final class ClaimController {
                         runMain(() -> fail(player, operationKey, throwable));
                         return;
                     }
-                    runMain(() -> transitionToVanilla(player, target, record, generated, operationKey));
+                    runMain(() -> {
+                        if (player.isOnline()) {
+                            lootAdvancements.award(player, record.lootTable());
+                        }
+                        transitionToVanilla(player, target, record, generated, operationKey);
+                    });
                 });
     }
 
@@ -345,6 +363,7 @@ public final class ClaimController {
             exhausted.clear(record.id());
             if (player.isOnline()) {
                 player.openInventory(target.sourceInventory());
+                piglinAnger.reactToOpen(player, target);
                 if (settings.get().showFinalClaimMessage()) {
                     messages.get().send(player, "final-claim");
                 }
@@ -363,6 +382,7 @@ public final class ClaimController {
     private void openInventory(
             Player player, ContainerTarget target, ContainerRecord record, ItemStack[] contents) {
         sessions.open(player, record.id(), contents, title(), target);
+        piglinAnger.reactToOpen(player, target);
         PluginSettings current = settings.get();
         if (current.showRemainingClaims()) {
             int remaining = Math.max(0, record.maxClaims() - record.claimCount());
